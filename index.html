@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>库存管理</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="库存管理">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23007AFF'/><text x='50' y='68' font-size='50' text-anchor='middle' fill='white'>📦</text></svg>">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f2f2f7; color: #000; }
+    .app { max-width: 500px; margin: 0 auto; min-height: 100vh; background: #fff; position: relative; }
+    .tab-bar { position: fixed; bottom: 0; width: 100%; max-width: 500px; display: flex; background: #f9f9f9; border-top: 1px solid #c6c6c8; }
+    .tab-item { flex: 1; text-align: center; padding: 10px 0; font-size: 10px; color: #8e8e93; }
+    .tab-item.active { color: #007aff; }
+    .tab-icon { font-size: 20px; }
+    .page { display: none; padding: 16px; padding-bottom: 70px; min-height: 100vh; }
+    .page.active { display: block; }
+    .list-item { padding: 12px; background: #fff; border-bottom: 1px solid #e5e5ea; display: flex; align-items: center; }
+    .btn { padding: 10px 16px; border-radius: 10px; background: #007aff; color: #fff; border: none; font-weight: 600; cursor: pointer; }
+    .btn-small { padding: 6px 12px; font-size: 14px; }
+    .btn-outline { background: transparent; border: 1px solid #007aff; color: #007aff; }
+    .input-field { padding: 10px; border: 1px solid #c7c7cc; border-radius: 10px; width: 100%; margin-bottom: 12px; font-size: 16px; }
+    .label { font-size: 14px; font-weight: 600; margin-bottom: 4px; display: block; }
+    .card { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 16px; }
+    .text-red { color: #ff3b30; }
+    .text-orange { color: #ff9500; }
+    .text-green { color: #34c759; }
+    .text-secondary { color: #8e8e93; font-size: 14px; }
+    h2 { margin-bottom: 16px; }
+    .star-rating { display: inline-flex; gap: 2px; }
+    .star-rating span { font-size: 18px; color: #c7c7cc; cursor: pointer; }
+    .star-rating span.filled { color: #ffcc00; }
+    .section-title { font-size: 16px; font-weight: 600; margin: 16px 0 8px; }
+    select.input-field { background: #fff; }
+    .btn-danger { background: #ff3b30; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div id="page-products" class="page active"></div>
+  <div id="page-locations" class="page"></div>
+  <div id="page-summary" class="page"></div>
+
+  <div class="tab-bar">
+    <div class="tab-item active" data-page="products"><div class="tab-icon">📦</div>商品</div>
+    <div class="tab-item" data-page="locations"><div class="tab-icon">📍</div>库存</div>
+    <div class="tab-item" data-page="summary"><div class="tab-icon">📊</div>概览</div>
+  </div>
+</div>
+
+<script>
+// ====================== 数据管理 ======================
+const STORAGE_KEY = 'inventory_data';
+
+let appData = {
+  products: [],
+  locations: [{ id: '1', name: '默认仓库' }],
+  stockEntries: [],
+  stockRecords: []
+};
+
+function loadData() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) {
+    try { appData = JSON.parse(raw); } catch(e) {}
+  }
+  if (!appData.locations.length) appData.locations = [{ id: '1', name: '默认仓库' }];
+}
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+}
+
+function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2); }
+
+function getStockQuantity(productId, locationId) {
+  const entry = appData.stockEntries.find(e => e.productId === productId && e.locationId === locationId);
+  return entry ? entry.quantity : 0;
+}
+
+function totalStock(productId) {
+  return appData.stockEntries.filter(e => e.productId === productId).reduce((sum, e) => sum + e.quantity, 0);
+}
+
+function setStock(productId, locationId, quantity) {
+  const idx = appData.stockEntries.findIndex(e => e.productId === productId && e.locationId === locationId);
+  if (idx >= 0) {
+    if (quantity <= 0) appData.stockEntries.splice(idx, 1);
+    else appData.stockEntries[idx].quantity = quantity;
+  } else if (quantity > 0) {
+    appData.stockEntries.push({ id: genId(), productId, locationId, quantity });
+  }
+  const product = appData.products.find(p => p.id === productId);
+  if (product) product.updatedAt = new Date().toISOString();
+  saveData();
+}
+
+function stockIn(productId, locationId, quantity, note) {
+  setStock(productId, locationId, getStockQuantity(productId, locationId) + quantity);
+  appData.stockRecords.push({ id: genId(), productId, locationId, type: '入库', quantityChange: quantity, date: new Date().toISOString(), note });
+  saveData();
+}
+
+function stockOut(productId, locationId, quantity, note) {
+  const current = getStockQuantity(productId, locationId);
+  const actual = Math.min(quantity, current);
+  if (actual <= 0) return;
+  setStock(productId, locationId, current - actual);
+  appData.stockRecords.push({ id: genId(), productId, locationId, type: '出库', quantityChange: -actual, date: new Date().toISOString(), note });
+  saveData();
+}
+
+function deleteProduct(id) {
+  appData.products = appData.products.filter(p => p.id !== id);
+  appData.stockEntries = appData.stockEntries.filter(e => e.productId !== id);
+  appData.stockRecords = appData.stockRecords.filter(r => r.productId !== id);
+  saveData();
+}
+
+function getExpiryInfo(product) {
+  if (!product.expirationDate) return { text: '', color: '' };
+  const now = new Date();
+  const exp = new Date(product.expirationDate);
+  const days = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+  if (days < 0) return { text: `已过期 ${Math.abs(days)} 天`, color: 'text-red' };
+  if (days <= 30) return { text: `${days} 天后到期`, color: 'text-orange' };
+  return { text: '正常', color: 'text-green' };
+}
+
+// ====================== 商品列表页 ======================
+function renderProducts() {
+  const container = document.getElementById('page-products');
+  const products = [...appData.products].sort((a,b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  container.innerHTML = `
+    <h2>商品列表</h2>
+    <input class="input-field" type="text" id="searchInput" placeholder="搜索名称、品牌、条码" oninput="renderProducts()">
+    <div id="productList"></div>
+    <button class="btn" style="width:100%; margin-top:16px" onclick="showAddProduct()">+ 手动添加商品</button>
+  `;
+  const search = document.getElementById('searchInput')?.value.toLowerCase() || '';
+  const filtered = products.filter(p => 
+    p.name.toLowerCase().includes(search) || 
+    p.brand.toLowerCase().includes(search) || 
+    (p.barcode||'').includes(search)
+  );
+  const listDiv = document.getElementById('productList');
+  if (filtered.length === 0) {
+    listDiv.innerHTML = '<p style="text-align:center;color:#8e8e93;padding:40px">暂无商品</p>';
+    return;
+  }
+  listDiv.innerHTML = filtered.map(p => {
+    const expiry = getExpiryInfo(p);
+    const total = totalStock(p.id);
+    return `
+      <div class="list-item" onclick="showProductDetail('${p.id}')">
+        <div style="flex:1">
+          <div style="font-weight:600">${p.name}</div>
+          <div class="text-secondary">${p.brand} · ${p.category}</div>
+          <div class="star-rating">${[1,2,3,4,5].map(i => `<span class="${i<=p.rating?'filled':''}">★</span>`).join('')}</div>
+          ${expiry.text ? `<div class="${expiry.color}" style="font-size:12px">${expiry.text}</div>` : ''}
+        </div>
+        <div style="font-weight:bold; margin-left:12px">${total} 件</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ====================== 商品详情页 ======================
+function showProductDetail(id) {
+  const product = appData.products.find(p => p.id === id);
+  if (!product) return;
+  const expiry = getExpiryInfo(product);
+  const nutrition = product.nutrition || {};
+  const totalEnergy = (product.netWeightG && nutrition.energyKJ) ? (nutrition.energyKJ * product.netWeightG / 100).toFixed(1) : null;
+  const page = document.getElementById('page-products');
+  page.innerHTML = `
+    <div style="padding-bottom:20px">
+      <button class="btn btn-small btn-outline" style="margin-bottom:12px" onclick="renderProducts()">← 返回列表</button>
+      <div class="card">
+        <div style="font-size:20px; font-weight:bold; margin-bottom:8px">${product.name}</div>
+        <div class="star-rating">${[1,2,3,4,5].map(i => `<span class="${i<=product.rating?'filled':''}">★</span>`).join('')}</div>
+        <p><span class="label">条码：</span>${product.barcode || '无'}</p>
+        <p><span class="label">品牌：</span>${product.brand}</p>
+        <p><span class="label">分类：</span>${product.category}</p>
+        ${product.netWeightG ? `<p><span class="label">净含量：</span>${product.netWeightG} 克</p>` : ''}
+        ${product.manufactureDate ? `<p><span class="label">生产日期：</span>${new Date(product.manufactureDate).toLocaleDateString()}</p>` : ''}
+        ${product.shelfLifeDays ? `<p><span class="label">保质期：</span>${product.shelfLifeDays} 天</p>` : ''}
+        ${product.expirationDate ? `<p><span class="label">过期日期：</span>${new Date(product.expirationDate).toLocaleDateString()} <span class="${expiry.color}">${expiry.text}</span></p>` : ''}
+      </div>
+      ${nutrition.energyKJ || nutrition.proteinG ? `
+      <div class="card">
+        <div class="section-title">营养成分 (每100克)</div>
+        ${nutrition.energyKJ ? `<p>能量: ${nutrition.energyKJ} kJ</p>` : ''}
+        ${nutrition.proteinG ? `<p>蛋白质: ${nutrition.proteinG} g</p>` : ''}
+        ${nutrition.fatG ? `<p>脂肪: ${nutrition.fatG} g</p>` : ''}
+        ${nutrition.carbsG ? `<p>碳水化合物: ${nutrition.carbsG} g</p>` : ''}
+        ${nutrition.sodiumMG ? `<p>钠: ${nutrition.sodiumMG} mg</p>` : ''}
+        ${totalEnergy ? `<p style="color:orange; font-weight:bold">整包总能量: ${totalEnergy} kJ</p>` : ''}
+      </div>` : ''}
+      <div class="card">
+        <div class="section-title">库存分布</div>
+        ${appData.locations.map(loc => {
+          const qty = getStockQuantity(product.id, loc.id);
+          return `<div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee"><span>📍 ${loc.name}</span><span style="font-weight:bold">${qty} 件</span></div>`;
+        }).join('')}
+      </div>
+      <div style="display:flex; gap:12px; margin-top:16px">
+        <button class="btn" style="flex:1" onclick="showStockOp('${product.id}','入库')">入库</button>
+        <button class="btn btn-outline" style="flex:1" onclick="showStockOp('${product.id}','出库')">出库</button>
+      </div>
+      <button class="btn btn-small" style="margin-top:12px; width:100%" onclick="showEditProduct('${product.id}')">编辑商品</button>
+      <button class="btn btn-small btn-danger" style="margin-top:8px; width:100%" onclick="if(confirm('确定删除？')){deleteProduct('${product.id}'); renderProducts();}">删除商品</button>
+    </div>
+  `;
+}
+
+// ====================== 入库/出库操作 ======================
+function showStockOp(productId, type) {
+  const page = document.getElementById('page-products');
+  const product = appData.products.find(p => p.id === productId);
+  page.innerHTML = `
+    <button class="btn btn-small btn-outline" style="margin-bottom:12px" onclick="showProductDetail('${productId}')">← 返回</button>
+    <h2>${type}</h2>
+    <div class="card">
+      <p>商品: ${product.name}</p>
+      <div class="label">选择仓库</div>
+      <select id="locSelect" class="input-field">${appData.locations.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}</select>
+      <div id="currentStock" class="text-secondary"></div>
+      <div class="label">数量</div>
+      <input type="number" id="qtyInput" class="input-field" min="1" value="1">
+      <div class="label">备注</div>
+      <input type="text" id="noteInput" class="input-field" placeholder="可选">
+      <button class="btn" style="width:100%" id="confirmBtn">确认${type}</button>
+    </div>
+  `;
+
+  const locSelect = document.getElementById('locSelect');
+  const qtyInput = document.getElementById('qtyInput');
+  const currentStockDiv = document.getElementById('currentStock');
+  function updateStockDisplay() {
+    const locId = locSelect.value;
+    const qty = getStockQuantity(productId, locId);
+    currentStockDiv.textContent = `当前库存: ${qty} 件`;
+    if (type === '出库') {
+      qtyInput.max = qty;
+      if (parseInt(qtyInput.value) > qty) qtyInput.value = qty;
+    }
+  }
+  locSelect.addEventListener('change', updateStockDisplay);
+  updateStockDisplay();
+
+  document.getElementById('confirmBtn').addEventListener('click', () => {
+    const locId = locSelect.value;
+    const qty = parseInt(qtyInput.value);
+    if (!qty || qty <= 0) return alert('请输入有效数量');
+    const note = document.getElementById('noteInput').value;
+    if (type === '入库') {
+      stockIn(productId, locId, qty, note);
+    } else {
+      if (qty > getStockQuantity(productId, locId)) return alert('库存不足');
+      stockOut(productId, locId, qty, note);
+    }
+    showProductDetail(productId);
+  });
+}
+
+// ====================== 添加/编辑商品表单 ======================
+function showAddProduct() {
+  const page = document.getElementById('page-products');
+  page.innerHTML = buildFormHTML(null);
+  attachFormEvents(null);
+}
+
+function showEditProduct(id) {
+  const page = document.getElementById('page-products');
+  page.innerHTML = buildFormHTML(id);
+  attachFormEvents(id);
+}
+
+function buildFormHTML(editId) {
+  const product = editId ? appData.products.find(p => p.id === editId) : {};
+  const isEdit = editId !== null;
+  return `
+    <button class="btn btn-small btn-outline" style="margin-bottom:12px" onclick="${isEdit ? `showProductDetail('${editId}')` : 'renderProducts()'}">← 返回</button>
+    <h2>${isEdit ? '编辑商品' : '添加商品'}</h2>
+    <div class="card" id="addForm">
+      <input type="text" id="name" class="input-field" placeholder="商品名称" value="${product.name || ''}">
+      <input type="text" id="brand" class="input-field" placeholder="品牌" value="${product.brand || ''}">
+      <input type="text" id="category" class="input-field" placeholder="分类" value="${product.category || ''}">
+      <input type="text" id="barcode" class="input-field" placeholder="条码（可选）" value="${product.barcode || ''}">
+      <div class="label">评分</div>
+      <div class="star-rating" id="starRating">
+        ${[1,2,3,4,5].map(i => `<span data-value="${i}" class="${i<=(product.rating||0)?'filled':''}">★</span>`).join('')}
+      </div>
+      <input type="number" id="netWeight" class="input-field" placeholder="净含量（克）" value="${product.netWeightG || ''}">
+      <div class="label">生产日期</div>
+      <input type="date" id="manuDate" class="input-field" value="${product.manufactureDate ? new Date(product.manufactureDate).toISOString().split('T')[0] : ''}">
+      <div class="label">保质期（天）</div>
+      <input type="number" id="shelfLife" class="input-field" placeholder="如 180" value="${product.shelfLifeDays || ''}">
+      <div class="label">过期日期（自动计算或手动修改）</div>
+      <input type="date" id="expDate" class="input-field" value="${product.expirationDate ? new Date(product.expirationDate).toISOString().split('T')[0] : ''}">
+      <div class="section-title">营养成分 (每100克)</div>
+      <input type="number" id="energy" class="input-field" placeholder="能量 (kJ)" value="${product.nutrition?.energyKJ || ''}">
+      <input type="number" id="protein" class="input-field" placeholder="蛋白质 (g)" value="${product.nutrition?.proteinG || ''}">
+      <input type="number" id="fat" class="input-field" placeholder="脂肪 (g)" value="${product.nutrition?.fatG || ''}">
+      <input type="number" id="carbs" class="input-field" placeholder="碳水化合物 (g)" value="${product.nutrition?.carbsG || ''}">
+      <input type="number" id="sodium" class="input-field" placeholder="钠 (mg)" value="${product.nutrition?.sodiumMG || ''}">
+      ${!isEdit ? `
+        <div class="label">初始存储地点</div>
+        <select id="initLoc" class="input-field">${appData.locations.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}</select>
+        <input type="number" id="initQty" class="input-field" placeholder="初始数量" value="1">
+      ` : ''}
+      <button class="btn" style="width:100%; margin-top:12px" id="saveBtn">保存</button>
+    </div>
+  `;
+}
+
+function attachFormEvents(editId) {
+  const starRating = document.getElementById('starRating');
+  starRating.addEventListener('click', (e) => {
+    if (e.target.dataset.value) {
+      const val = parseInt(e.target.dataset.value);
+      starRating.querySelectorAll('span').forEach(s => s.classList.toggle('filled', parseInt(s.dataset.value) <= val));
+      starRating.dataset.rating = val;
+    }
+  });
+
+  const manuInput = document.getElementById('manuDate');
+  const shelfInput = document.getElementById('shelfLife');
+  const expInput = document.getElementById('expDate');
+  function calcExpiry() {
+    if (manuInput.value && shelfInput.value) {
+      const manu = new Date(manuInput.value);
+      const days = parseInt(shelfInput.value);
+      if (!isNaN(days)) {
+        manu.setDate(manu.getDate() + days);
+        expInput.value = manu.toISOString().split('T')[0];
+      }
+    }
+  }
+  manuInput.addEventListener('change', calcExpiry);
+  shelfInput.addEventListener('input', calcExpiry);
+
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    const name = document.getElementById('name').value.trim();
+    const brand = document.getElementById('brand').value.trim();
+    if (!name || !brand) return alert('名称和品牌必填');
+    const productData = {
+      id: editId || genId(),
+      barcode: document.getElementById('barcode').value.trim(),
+      name,
+      brand,
+      category: document.getElementById('category').value.trim(),
+      rating: parseInt(starRating.dataset.rating || 0),
+      netWeightG: parseFloat(document.getElementById('netWeight').value) || undefined,
+      manufactureDate: document.getElementById('manuDate').value || undefined,
+      shelfLifeDays: parseInt(document.getElementById('shelfLife').value) || undefined,
+      expirationDate: document.getElementById('expDate').value || undefined,
+      nutrition: {
+        energyKJ: parseFloat(document.getElementById('energy').value) || undefined,
+        proteinG: parseFloat(document.getElementById('protein').value) || undefined,
+        fatG: parseFloat(document.getElementById('fat').value) || undefined,
+        carbsG: parseFloat(document.getElementById('carbs').value) || undefined,
+        sodiumMG: parseFloat(document.getElementById('sodium').value) || undefined,
+      },
+      createdAt: editId ? (appData.products.find(p => p.id === editId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (editId) {
+      const idx = appData.products.findIndex(p => p.id === editId);
+      if (idx >= 0) appData.products[idx] = productData;
+    } else {
+      const locId = document.getElementById('initLoc').value;
+      const qty = parseInt(document.getElementById('initQty').value) || 0;
+      appData.products.push(productData);
+      if (qty > 0) setStock(productData.id, locId, qty);
+    }
+    saveData();
+    if (editId) showProductDetail(editId);
+    else renderProducts();
+  });
+}
+
+// ====================== 地点管理 ======================
+function renderLocations() {
+  const container = document.getElementById('page-locations');
+  container.innerHTML = `
+    <h2>仓库地点</h2>
+    <div id="locList">${appData.locations.map(l => `<div class="list-item" onclick="showLocationDetail('${l.id}')"><span>📍 ${l.name}</span></div>`).join('')}</div>
+    <button class="btn btn-small" style="width:100%; margin-top:16px" onclick="addLocation()">+ 添加地点</button>
+  `;
+}
+function addLocation() {
+  const name = prompt('输入仓库名称');
+  if (name) {
+    appData.locations.push({ id: genId(), name });
+    saveData();
+    renderLocations();
+  }
+}
+function showLocationDetail(locId) {
+  const location = appData.locations.find(l => l.id === locId);
+  const page = document.getElementById('page-locations');
+  page.innerHTML = `
+    <button class="btn btn-small btn-outline" style="margin-bottom:12px" onclick="renderLocations()">← 返回</button>
+    <h2>${location.name}</h2>
+    ${appData.products.map(p => {
+      const qty = getStockQuantity(p.id, locId);
+      if (qty === 0) return '';
+      return `<div class="list-item"><span>${p.name} - ${p.brand}</span><span style="font-weight:bold">${qty} 件</span></div>`;
+    }).join('') || '<p class="text-secondary">暂无库存</p>'}
+    <button class="btn btn-small btn-danger" style="width:100%; margin-top:16px" onclick="if(confirm('删除地点及所有库存？')){deleteLocation('${locId}')}">删除地点</button>
+  `;
+}
+function deleteLocation(locId) {
+  appData.locations = appData.locations.filter(l => l.id !== locId);
+  appData.stockEntries = appData.stockEntries.filter(e => e.locationId !== locId);
+  appData.stockRecords = appData.stockRecords.filter(r => r.locationId !== locId);
+  saveData();
+  renderLocations();
+}
+
+// ====================== 概览 ======================
+function renderSummary() {
+  const container = document.getElementById('page-summary');
+  const totalItems = appData.stockEntries.reduce((s, e) => s + e.quantity, 0);
+  container.innerHTML = `
+    <h2>库存概览</h2>
+    <div class="card"><p>商品种类: ${appData.products.length}</p></div>
+    <div class="card"><p>仓库数量: ${appData.locations.length}</p></div>
+    <div class="card"><p>总库存件数: ${totalItems}</p></div>
+    <button class="btn" style="width:100%" onclick="switchTab('products'); showAddProduct();">手动添加商品</button>
+  `;
+}
+
+// ====================== 导航切换 ======================
+function switchTab(pageName) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(`page-${pageName}`).classList.add('active');
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab-item[data-page="${pageName}"]`).classList.add('active');
+  if (pageName === 'products') renderProducts();
+  if (pageName === 'locations') renderLocations();
+  if (pageName === 'summary') renderSummary();
+}
+
+document.querySelectorAll('.tab-item').forEach(item => {
+  item.addEventListener('click', () => switchTab(item.dataset.page));
+});
+
+// 初始化
+loadData();
+switchTab('products');
+</script>
+</body>
+</html>
