@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1.0">
+  <title>库存管理</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="库存管理">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23007AFF'/><text x='50' y='68' font-size='50' text-anchor='middle' fill='white'>📦</text></svg>">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f2f2f7; color: #000; }
+    .app { max-width: 500px; margin: 0 auto; min-height: 100vh; background: #fff; position: relative; overflow-x: hidden; }
+    .tab-bar { position: fixed; bottom: 0; width: 100%; max-width: 500px; display: flex; background: #f9f9f9; border-top: 1px solid #c6c6c8; z-index: 10; }
+    .tab-item { flex: 1; text-align: center; padding: 10px 0 6px; font-size: 10px; color: #8e8e93; }
+    .tab-item.active { color: #007aff; }
+    .tab-icon { font-size: 20px; display: block; margin-bottom: 2px; }
+    .page { display: none; padding: 16px; padding-bottom: 70px; min-height: 100vh; }
+    .page.active { display: block; }
+    .list-item { padding: 12px; background: #fff; border-bottom: 1px solid #e5e5ea; display: flex; align-items: center; }
+    .btn { padding: 10px 16px; border-radius: 10px; background: #007aff; color: #fff; border: none; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .btn-small { padding: 6px 12px; font-size: 13px; }
+    .btn-outline { background: transparent; border: 1px solid #007aff; color: #007aff; }
+    .btn-danger { background: #ff3b30; }
+    .btn-success { background: #34c759; }
+    .input-field { padding: 10px; border: 1px solid #c7c7cc; border-radius: 10px; width: 100%; margin-bottom: 12px; font-size: 16px; -webkit-appearance: none; }
+    select.input-field { background: #fff; }
+    .label { font-size: 14px; font-weight: 600; margin-bottom: 4px; display: block; }
+    .card { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 16px; }
+    .text-red { color: #ff3b30; }
+    .text-orange { color: #ff9500; }
+    .text-green { color: #34c759; }
+    .text-secondary { color: #8e8e93; font-size: 14px; }
+    h2 { margin-bottom: 16px; font-size: 22px; }
+    .star-rating { display: inline-flex; gap: 2px; }
+    .star-rating span { font-size: 16px; color: #c7c7cc; }
+    .star-rating span.filled { color: #ffcc00; }
+    .section-title { font-size: 16px; font-weight: 600; margin: 16px 0 8px; }
+
+    /* 滑动操作 */
+    .swipe-container { position: relative; overflow: hidden; border-bottom: 1px solid #e5e5ea; background: #fff; }
+    .swipe-bg { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; width: 160px; }
+    .swipe-bg-left { left: 0; justify-content: flex-start; padding-left: 12px; }
+    .swipe-bg-right { right: 0; justify-content: flex-end; padding-right: 12px; }
+    .swipe-action-btn { padding: 10px 16px; border-radius: 8px; font-weight: bold; color: #fff; border: none; min-width: 60px; text-align: center; font-size: 14px; }
+    .btn-outbound { background: #ff9500; }
+    .btn-inbound { background: #34c759; }
+    .swipe-content { position: relative; background: #fff; transition: transform 0.2s ease; z-index: 2; touch-action: pan-y; }
+    .btn-group { display: flex; gap: 8px; margin-top: 12px; }
+    .btn-group .btn { flex: 1; }
+    .category-filter { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .category-filter .btn { flex: 1 1 auto; min-width: 60px; }
+    .category-filter .btn.active { background: #007aff; color: #fff; }
+    .group-title { background: #f0f0f5; padding: 10px 12px; border-radius: 8px; margin: 10px 0 4px; font-weight: 600; display: flex; justify-content: space-between; }
+    .empty-tip { text-align: center; color: #8e8e93; padding: 20px; }
+
+    /* 新增列表元素样式 */
+    .product-name { font-size: 17px; font-weight: 600; }
+    .product-brand { font-size: 14px; color: #8e8e93; }
+    .product-price { background: #f0f0f5; padding: 3px 10px; border-radius: 12px; font-size: 14px; font-weight: 600; color: #007aff; }
+    .product-stock { font-size: 18px; font-weight: bold; }
+    .product-kcal { background: #ffecd2; padding: 3px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; color: #ff9500; }
+    .expiry-tag { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+    .expiry-expired { background: #ffe5e5; color: #ff3b30; }
+    .expiry-warning { background: #fff3e0; color: #ff9500; }
+    .expiry-normal { background: #e5f9e5; color: #34c759; }
+    .row-info { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+    .checkbox-group { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
+    .checkbox-group label { display: flex; align-items: center; gap: 4px; font-size: 15px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div id="page-products" class="page active"></div>
+  <div id="page-locations" class="page"></div>
+  <div id="page-summary" class="page"></div>
+
+  <div class="tab-bar">
+    <div class="tab-item active" data-page="products"><span class="tab-icon">📦</span>商品</div>
+    <div class="tab-item" data-page="locations"><span class="tab-icon">📍</span>库存</div>
+    <div class="tab-item" data-page="summary"><span class="tab-icon">📊</span>概览</div>
+  </div>
+  <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleFileImport(this.files[0])">
+</div>
+
+<script>
+// ====================== 数据管理 ======================
+const STORAGE_KEY = 'inventory_data';
+let appData = {
+  products: [],
+  categories: [
+    { id: 'cat-drink', name: '饮品', groups: [
+      { id: 'grp-coffee', name: '咖啡' },
+      { id: 'grp-brew', name: '冲饮' },
+      { id: 'grp-tea', name: '茶饮' },
+      { id: 'grp-juice', name: '果汁' }
+    ]},
+    { id: 'cat-food', name: '食物', groups: [
+      { id: 'grp-carbs', name: '碳水' }
+    ]}
+  ],
+  locations: [{ id: '1', name: '默认仓库' }],
+  stockEntries: [],
+  stockRecords: [],
+  // 新增：列表显示设置
+  listSettings: {
+    showBrand: true,
+    showCategory: false,
+    showPrice: true,
+    showRating: false,
+    showKcal: true,
+    showStock: true,
+    showExpiry: true
+  }
+};
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) appData = JSON.parse(raw);
+  } catch(e) {}
+  if (!appData.locations || appData.locations.length === 0) {
+    appData.locations = [{ id: '1', name: '默认仓库' }];
+  }
+  if (!appData.categories || appData.categories.length === 0) {
+    appData.categories = [
+      { id: 'cat-drink', name: '饮品', groups: [
+        { id: 'grp-coffee', name: '咖啡' }, { id: 'grp-brew', name: '冲饮' },
+        { id: 'grp-tea', name: '茶饮' }, { id: 'grp-juice', name: '果汁' }
+      ]},
+      { id: 'cat-food', name: '食物', groups: [
+        { id: 'grp-carbs', name: '碳水' }
+      ]}
+    ];
+  }
+  if (!appData.listSettings) {
+    appData.listSettings = {
+      showBrand: true, showCategory: false, showPrice: true,
+      showRating: false, showKcal: true, showStock: true, showExpiry: true
+    };
+  }
+  appData.products.forEach(p => {
+    if (!p.categoryId) {
+      p.categoryId = 'cat-drink';
+      p.groupId = 'grp-uncategorized';
+    }
+  });
+  const drinkCat = appData.categories.find(c => c.id === 'cat-drink');
+  if (drinkCat && !drinkCat.groups.find(g => g.id === 'grp-uncategorized')) {
+    drinkCat.groups.push({ id: 'grp-uncategorized', name: '未分类' });
+  }
+  saveData();
+}
+function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(appData)); }
+function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2); }
+
+function getStockQuantity(productId, locationId) {
+  const entry = appData.stockEntries.find(e => e.productId === productId && e.locationId === locationId);
+  return entry ? entry.quantity : 0;
+}
+function totalStock(productId) {
+  return appData.stockEntries.filter(e => e.productId === productId).reduce((s, e) => s + e.quantity, 0);
+}
+function setStock(productId, locationId, quantity) {
+  const idx = appData.stockEntries.findIndex(e => e.productId === productId && e.locationId === locationId);
+  if (idx >= 0) {
+    if (quantity <= 0) appData.stockEntries.splice(idx, 1);
+    else appData.stockEntries[idx].quantity = quantity;
+  } else if (quantity > 0) {
+    appData.stockEntries.push({ id: genId(), productId, locationId, quantity });
+  }
+  const prod = appData.products.find(p => p.id === productId);
+  if (prod) prod.updatedAt = new Date().toISOString();
+  saveData();
+}
+function stockIn(productId, locationId, quantity, note) {
+  setStock(productId, locationId, getStockQuantity(productId, locationId) + quantity);
+  appData.stockRecords.push({ id: genId(), productId, locationId, type: '入库', quantityChange: quantity, date: new Date().toISOString(), note: note || '' });
+  saveData();
+}
+function stockOut(productId, locationId, quantity, note) {
+  const current = getStockQuantity(productId, locationId);
+  const actual = Math.min(quantity, current);
+  if (actual <= 0) return;
+  setStock(productId, locationId, current - actual);
+  appData.stockRecords.push({ id: genId(), productId, locationId, type: '出库', quantityChange: -actual, date: new Date().toISOString(), note: note || '' });
+  saveData();
+}
+function deleteProduct(id) {
+  appData.products = appData.products.filter(p => p.id !== id);
+  appData.stockEntries = appData.stockEntries.filter(e => e.productId !== id);
+  appData.stockRecords = appData.stockRecords.filter(r => r.productId !== id);
+  saveData();
+}
+function calcTotalKcal(product) {
+  if (product.netWeightG && product.nutrition && product.nutrition.energyKJ) {
+    return Math.round(product.nutrition.energyKJ * product.netWeightG / 100 * 0.239);
+  }
+  return null;
+}
+function getExpiryInfo(product) {
+  if (!product.expirationDate) return { text: '', color: '' };
+  const now = new Date();
+  const exp = new Date(product.expirationDate);
+  const days = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+  if (days < 0) return { text: '已过期 ' + Math.abs(days) + ' 天', color: 'expired' };
+  if (days <= 30) return { text: days + ' 天后到期', color: 'warning' };
+  return { text: '正常', color: 'normal' };
+}
+
+// ====================== 商品列表（按大类过滤，分组平铺，可定制字段） ======================
+let currentCategoryFilter = 'all';
+
+function renderProducts() {
+  const container = document.getElementById('page-products');
+  container.innerHTML = '<h2>商品列表</h2>' +
+    '<input class="input-field" type="text" id="searchInput" placeholder="搜索名称、品牌、条码" oninput="renderProducts()">' +
+    '<div class="category-filter" id="categoryFilter"></div>' +
+    '<div id="productGroups"></div>' +
+    '<div class="btn-group">' +
+      '<button class="btn btn-success" onclick="downloadTemplate()">📥 模板</button>' +
+      '<button class="btn btn-outline" onclick="triggerFileInput()">📂 批量导入</button>' +
+    '</div>' +
+    '<button class="btn" style="width:100%; margin-top:8px" onclick="showAddProduct()">+ 手动添加商品</button>';
+
+  const filterDiv = document.getElementById('categoryFilter');
+  filterDiv.innerHTML = '<button class="btn btn-small ' + (currentCategoryFilter === 'all' ? 'active' : 'btn-outline') + '" onclick="switchCategoryFilter(\'all\')">全部</button>';
+  appData.categories.forEach(cat => {
+    filterDiv.innerHTML += '<button class="btn btn-small ' + (currentCategoryFilter === cat.id ? 'active' : 'btn-outline') + '" onclick="switchCategoryFilter(\'' + cat.id + '\')">' + cat.name + '</button>';
+  });
+
+  const searchInput = document.getElementById('searchInput');
+  const keyword = searchInput ? searchInput.value.toLowerCase() : '';
+  const settings = appData.listSettings;
+
+  const groupsDiv = document.getElementById('productGroups');
+  groupsDiv.innerHTML = '';
+
+  const categoriesToShow = currentCategoryFilter === 'all' ? appData.categories : appData.categories.filter(c => c.id === currentCategoryFilter);
+
+  categoriesToShow.forEach(cat => {
+    cat.groups.forEach(group => {
+      const groupProducts = appData.products.filter(p => {
+        if (p.categoryId !== cat.id || p.groupId !== group.id) return false;
+        if (keyword) {
+          return p.name.toLowerCase().indexOf(keyword) !== -1 ||
+                 p.brand.toLowerCase().indexOf(keyword) !== -1 ||
+                 (p.barcode || '').indexOf(keyword) !== -1;
+        }
+        return true;
+      });
+      if (groupProducts.length === 0 && keyword) return;
+
+      const groupHeader = document.createElement('div');
+      groupHeader.className = 'group-title';
+      groupHeader.innerHTML = '<span>' + cat.name + ' > ' + group.name + ' (' + groupProducts.length + ')</span>';
+      groupsDiv.appendChild(groupHeader);
+
+      if (groupProducts.length > 0) {
+        groupProducts.forEach(p => {
+          const expiry = getExpiryInfo(p);
+          const total = totalStock(p.id);
+          const kcal = calcTotalKcal(p);
+
+          // 根据设置动态组装信息行
+          let infoRowHtml = '<div class="row-info">';
+          if (settings.showBrand) infoRowHtml += '<span class="product-brand">' + p.brand + '</span>';
+          if (settings.showCategory) {
+            const catName = appData.categories.find(c => c.id === p.categoryId)?.name || '';
+            const groupName = catName ? appData.categories.find(c => c.id === p.categoryId)?.groups.find(g => g.id === p.groupId)?.name || '' : '';
+            const catPath = [catName, groupName].filter(Boolean).join(' > ');
+            if (catPath) infoRowHtml += '<span class="product-brand">' + catPath + '</span>';
+          }
+          if (settings.showPrice && p.price) infoRowHtml += '<span class="product-price">¥' + p.price + '</span>';
+          if (settings.showRating) {
+            infoRowHtml += '<div class="star-rating">' + [1,2,3,4,5].map(i => '<span class="' + (i <= p.rating ? 'filled' : '') + '">★</span>').join('') + '</div>';
+          }
+          if (settings.showKcal) {
+            const kcalVal = calcTotalKcal(p);
+            if (kcalVal !== null) infoRowHtml += '<span class="product-kcal">🔥 ' + kcalVal + ' kcal</span>';
+          }
+          if (settings.showExpiry && expiry.text) {
+            const expClass = expiry.color === 'expired' ? 'expiry-expired' : (expiry.color === 'warning' ? 'expiry-warning' : 'expiry-normal');
+            infoRowHtml += '<span class="expiry-tag ' + expClass + '">' + expiry.text + '</span>';
+          }
+          infoRowHtml += '</div>';
+
+          // 右侧库存大数字
+          const stockHtml = settings.showStock ? '<div style="margin-left:auto; text-align:right;"><div class="product-stock">' + total + '</div><div style="font-size:12px; color:#8e8e93;">件</div></div>' : '';
+
+          const swipeDiv = document.createElement('div');
+          swipeDiv.className = 'swipe-container';
+          swipeDiv.id = 'swipe-' + p.id;
+          swipeDiv.innerHTML =
+            '<div class="swipe-bg swipe-bg-left"><button class="swipe-action-btn btn-outbound" data-action="outbound" data-product-id="' + p.id + '">出库</button></div>' +
+            '<div class="swipe-bg swipe-bg-right"><button class="swipe-action-btn btn-inbound" data-action="inbound" data-product-id="' + p.id + '">入库</button></div>' +
+            '<div class="swipe-content list-item" data-product-id="' + p.id + '">' +
+              '<div style="flex:1" onclick="event.stopPropagation(); showProductDetail(\'' + p.id + '\')">' +
+                '<div class="product-name">' + p.name + '</div>' +
+                infoRowHtml +
+              '</div>' +
+              stockHtml +
+            '</div>';
+          groupsDiv.appendChild(swipeDiv);
+        });
+      } else if (!keyword) {
+        const emptyTip = document.createElement('div');
+        emptyTip.className = 'empty-tip';
+        emptyTip.textContent = '暂无商品';
+        groupsDiv.appendChild(emptyTip);
+      }
+    });
+  });
+}
+
+function switchCategoryFilter(catId) {
+  currentCategoryFilter = catId;
+  renderProducts();
+}
+
+// 滑动出入库逻辑
+let touchStartX = 0, touchStartY = 0, currentSwipeEl = null;
+function resetSwipe(el) {
+  if (!el) return;
+  const content = el.querySelector('.swipe-content');
+  if (content) content.style.transform = 'translateX(0px)';
+}
+document.addEventListener('touchstart', e => {
+  const content = e.target.closest('.swipe-content');
+  if (!content) return;
+  if (currentSwipeEl && currentSwipeEl !== content.parentElement) resetSwipe(currentSwipeEl);
+  currentSwipeEl = content.parentElement;
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}, { passive: false });
+document.addEventListener('touchmove', e => {
+  if (!currentSwipeEl) return;
+  const content = currentSwipeEl.querySelector('.swipe-content');
+  if (!content) return;
+  const dx = e.touches[0].clientX - touchStartX;
+  const dy = e.touches[0].clientY - touchStartY;
+  if (Math.abs(dy) > Math.abs(dx)) { resetSwipe(currentSwipeEl); return; }
+  e.preventDefault();
+  content.style.transform = 'translateX(' + Math.max(-80, Math.min(80, dx)) + 'px)';
+}, { passive: false });
+document.addEventListener('touchend', e => {
+  if (!currentSwipeEl) return;
+  const content = currentSwipeEl.querySelector('.swipe-content');
+  if (!content) return;
+  const dx = parseInt(content.style.transform.replace('translateX(', '')) || 0;
+  if (Math.abs(dx) > 50) {
+    const productId = content.dataset.productId;
+    if (dx < 0) quickOperationDialog(productId, 'outbound');
+    else quickOperationDialog(productId, 'inbound');
+  }
+  resetSwipe(currentSwipeEl);
+  currentSwipeEl = null;
+});
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.swipe-action-btn');
+  if (!btn) return;
+  quickOperationDialog(btn.dataset.productId, btn.dataset.action);
+});
+
+function quickOperationDialog(productId, type) {
+  const product = appData.products.find(p => p.id === productId);
+  if (!product) return;
+  const old = document.getElementById('quickOpOverlay');
+  if (old) old.remove();
+  const locOptions = appData.locations.map(l => '<option value="' + l.id + '">' + l.name + '</option>').join('');
+  const overlay = document.createElement('div');
+  overlay.id = 'quickOpOverlay';
+  overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; z-index:1000;';
+  overlay.innerHTML = '<div style="background:#fff; border-radius:14px; padding:20px; width:90%; max-width:360px;">' +
+    '<div style="font-size:18px; font-weight:bold; margin-bottom:12px;">快速' + (type === 'inbound' ? '入库' : '出库') + '</div>' +
+    '<div style="margin-bottom:8px; font-weight:600;">' + product.name + '</div>' +
+    '<div class="label">仓库</div><select id="quickLocSelect" class="input-field">' + locOptions + '</select>' +
+    '<div id="quickStockInfo" class="text-secondary"></div>' +
+    '<div class="label">数量</div><input type="number" id="quickQty" class="input-field" value="1" min="1">' +
+    '<div style="display:flex; gap:10px; justify-content:flex-end;">' +
+      '<button class="btn btn-outline btn-small" id="cancelQuickOp">取消</button>' +
+      '<button class="btn btn-small" id="confirmQuickOp">确认</button>' +
+    '</div></div>';
+  document.body.appendChild(overlay);
+  const locSelect = document.getElementById('quickLocSelect');
+  const qtyInput = document.getElementById('quickQty');
+  const stockInfo = document.getElementById('quickStockInfo');
+  function update() {
+    const locId = locSelect.value;
+    const stock = getStockQuantity(productId, locId);
+    stockInfo.textContent = '该地点当前库存：' + stock + ' 件';
+    if (type === 'outbound') { qtyInput.max = stock; if (parseInt(qtyInput.value) > stock) qtyInput.value = stock; }
+  }
+  locSelect.addEventListener('change', update);
+  update();
+  document.getElementById('cancelQuickOp').addEventListener('click', () => overlay.remove());
+  document.getElementById('confirmQuickOp').addEventListener('click', () => {
+    const locId = locSelect.value;
+    const qty = parseInt(qtyInput.value);
+    if (!qty || qty <= 0) { alert('请输入有效数量'); return; }
+    if (type === 'outbound' && qty > getStockQuantity(productId, locId)) { alert('库存不足'); return; }
+    if (type === 'inbound') stockIn(productId, locId, qty, '快速入库');
+    else stockOut(productId, locId, qty, '快速出库');
+    overlay.remove();
+    if (document.getElementById('page-products').classList.contains('active')) renderProducts();
+  });
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+// 商品详情（不变）
+function showProductDetail(id) {
+  const product = appData.products.find(p => p.id === id);
+  if (!product) return;
+  const expiry = getExpiryInfo(product);
+  const nutrition = product.nutrition || {};
+  const totalKcal = calcTotalKcal(product);
+  let nutritionHtml = '';
+  if (nutrition.energyKJ || nutrition.proteinG || nutrition.fatG || nutrition.carbsG || nutrition.sodiumMG) {
+    nutritionHtml = '<div class="card"><div class="section-title">营养成分 (每100克)</div>';
+    if (nutrition.energyKJ) nutritionHtml += '<p>能量: ' + nutrition.energyKJ + ' kJ</p>';
+    if (nutrition.proteinG) nutritionHtml += '<p>蛋白质: ' + nutrition.proteinG + ' g</p>';
+    if (nutrition.fatG) nutritionHtml += '<p>脂肪: ' + nutrition.fatG + ' g</p>';
+    if (nutrition.carbsG) nutritionHtml += '<p>碳水化合物: ' + nutrition.carbsG + ' g</p>';
+    if (nutrition.sodiumMG) nutritionHtml += '<p>钠: ' + nutrition.sodiumMG + ' mg</p>';
+    if (totalKcal !== null) nutritionHtml += '<p style="color:#ff9500; font-weight:bold;">整包总能量: ' + totalKcal + ' kcal</p>';
+    nutritionHtml += '</div>';
+  }
+  const locHtml = appData.locations.map(l => {
+    const qty = getStockQuantity(product.id, l.id);
+    return '<div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee"><span>📍 ' + l.name + '</span><span style="font-weight:bold">' + qty + ' 件</span></div>';
+  }).join('');
+  const page = document.getElementById('page-products');
+  page.innerHTML = '<button class="btn btn-small btn-outline" style="margin-bottom:12px" onclick="renderProducts()">← 返回</button>' +
+    '<div class="card"><div style="font-size:20px; font-weight:bold;">' + product.name + '</div>' +
+    (product.price ? '<p><span class="label">价格：</span>¥' + product.price + '</p>' : '') +
+    '<div class="star-rating">' + [1,2,3,4,5].map(i => '<span class="' + (i <= product.rating ? 'filled' : '') + '">★</span>').join('') + '</div>' +
+    '<p><span class="label">品牌：</span>' + product.brand + '</p>' +
+    '<p><span class="label">分类：</span>' + (getCategoryPath(product) || '未分类') + '</p>' +
+    (product.barcode ? '<p><span class="label">条码：</span>' + product.barcode + '</p>' : '') +
+    (product.netWeightG ? '<p><span class="label">净含量：</span>' + product.netWeightG + ' g</p>' : '') +
+    (product.manufactureDate ? '<p><span class="label">生产日期：</span>' + new Date(product.manufactureDate).toLocaleDateString() + '</p>' : '') +
+    (product.shelfLifeDays ? '<p><span class="label">保质期：</span>' + product.shelfLifeDays + ' 天</p>' : '') +
+    (product.expirationDate ? '<p><span class="label">过期日期：</span>' + new Date(product.expirationDate).toLocaleDateString() + ' <span class="' + (expiry.color === 'expired' ? 'text-red' : expiry.color === 'warning' ? 'text-orange' : 'text-green') + '">' + expiry.text + '</span></p>' : '') +
+    '</div>' +
+    nutritionHtml +
+    '<div class="card"><div class="section-title">库存分布</div>' + locHtml + '</div>' +
+    '<div style="display:flex; gap:12px; margin-top:16px">' +
+      '<button class="btn" style="flex:1" onclick="quickOperationDialog(\'' + product.id + '\', \'inbound\')">入库</button>' +
+      '<button class="btn btn-outline" style="flex:1" onclick="quickOperationDialog(\'' + product.id + '\', \'outbound\')">出库</button>' +
+    '</div>' +
+    '<button class="btn btn-small" style="width:100%; margin-top:12px" onclick="showEditProduct(\'' + product.id + '\')">编辑商品</button>' +
+    '<button class="btn btn-small btn-danger" style="width:100%; margin-top:8px" onclick="if(confirm(\'确定删除？\')){deleteProduct(\'' + product.id + '\'); renderProducts();}">删除商品</button>';
+}
+
+function getCategoryPath(product) {
+  const cat = appData.categories.find(c => c.id === product.categoryId);
+  if (!cat) return '';
+  const group = cat.groups.find(g => g.id === product.groupId);
+  return cat.name + (group ? ' > ' + group.name : '');
+}
+
+// 新增/编辑商品
+function showAddProduct() { document.getElementById('page-products').innerHTML = buildFormHTML(null); attachFormEvents(null); }
+function showEditProduct(id) { document.getElementById('page-products').innerHTML = buildFormHTML(id); attachFormEvents(id); }
+
+function buildFormHTML(editId) {
+  const product = editId ? appData.products.find(p => p.id === editId) : {};
+  const isEdit = !!editId;
+  const catOptions = appData.categories.map(c => '<option value="' + c.id + '" ' + (product.categoryId === c.id ? 'selected' : '') + '>' + c.name + '</option>').join('');
+  const defaultCatId = product.categoryId || (appData.categories[0] ? appData.categories[0].id : '');
+  let groupOptions = '';
+  const selectedCat = appData.categories.find(c => c.id === defaultCatId);
+  if (selectedCat) {
+    groupOptions = selectedCat.groups.map(g => '<option value="' + g.id + '" ' + (product.groupId === g.id ? 'selected' : '') + '>' + g.name + '</option>').join('');
+  }
+  return '<button class="btn btn-small btn-outline" style="margin-bottom:12px" onclick="' + (isEdit ? "showProductDetail('" + editId + "')" : "renderProducts()") + '">← 返回</button>' +
+    '<h2>' + (isEdit ? '编辑商品' : '添加商品') + '</h2>' +
+    '<div class="card" id="addForm">' +
+      '<input type="text" id="name" class="input-field" placeholder="商品名称" value="' + (product.name || '') + '">' +
+      '<input type="text" id="brand" class="input-field" placeholder="品牌" value="' + (product.brand || '') + '">' +
+      '<div class="label">分类</div>' +
+      '<select id="catSelect" class="input-field" onchange="updateGroupSelect()">' + catOptions + '</select>' +
+      '<select id="groupSelect" class="input-field">' + groupOptions + '</select>' +
+      '<input type="number" id="price" class="input-field" placeholder="价格（元）" value="' + (product.price || '') + '" step="0.01">' +
+      '<input type="text" id="barcode" class="input-field" placeholder="条码（可选）" value="' + (product.barcode || '') + '">' +
+      '<div class="label">评分</div><div class="star-rating" id="starRating">' + [1,2,3,4,5].map(i => '<span data-value="' + i + '" class="' + (i <= (product.rating || 0) ? 'filled' : '') + '">★</span>').join('') + '</div>' +
+      '<input type="number" id="netWeight" class="input-field" placeholder="净含量（克）" value="' + (product.netWeightG || '') + '">' +
+      '<div class="label">生产日期</div><input type="date" id="manuDate" class="input-field" value="' + (product.manufactureDate ? product.manufactureDate.split('T')[0] : '') + '">' +
+      '<div class="label">保质期（天）</div><input type="number" id="shelfLife" class="input-field" placeholder="如 180" value="' + (product.shelfLifeDays || '') + '">' +
+      '<div class="label">过期日期</div><input type="date" id="expDate" class="input-field" value="' + (product.expirationDate ? product.expirationDate.split('T')[0] : '') + '">' +
+      '<div class="section-title">营养成分 (每100克)</div>' +
+      '<input type="number" id="energy" class="input-field" placeholder="能量 (kJ)" value="' + (product.nutrition && product.nutrition.energyKJ ? product.nutrition.energyKJ : '') + '">' +
+      '<input type="number" id="protein" class="input-field" placeholder="蛋白质 (g)" value="' + (product.nutrition && product.nutrition.proteinG ? product.nutrition.proteinG : '') + '">' +
+      '<input type="number" id="fat" class="input-field" placeholder="脂肪 (g)" value="' + (product.nutrition && product.nutrition.fatG ? product.nutrition.fatG : '') + '">' +
+      '<input type="number" id="carbs" class="input-field" placeholder="碳水化合物 (g)" value="' + (product.nutrition && product.nutrition.carbsG ? product.nutrition.carbsG : '') + '">' +
+      '<input type="number" id="sodium" class="input-field" placeholder="钠 (mg)" value="' + (product.nutrition && product.nutrition.sodiumMG ? product.nutrition.sodiumMG : '') + '">' +
+      (isEdit ? '' : '<div class="label">初始存储地点</div><select id="initLoc" class="input-field">' + appData.locations.map(l => '<option value="' + l.id + '">' + l.name + '</option>').join('') + '</select><input type="number" id="initQty" class="input-field" placeholder="初始数量" value="1">') +
+      '<button class="btn" style="width:100%; margin-top:12px" id="saveBtn">保存</button>' +
+    '</div>';
+}
+
+function updateGroupSelect() {
+  const catId = document.getElementById('catSelect').value;
+  const cat = appData.categories.find(c => c.id === catId);
+  const groupSelect = document.getElementById('groupSelect');
+  if (groupSelect) groupSelect.innerHTML = cat ? cat.groups.map(g => '<option value="' + g.id + '">' + g.name + '</option>').join('') : '';
+}
+
+function attachFormEvents(editId) {
+  const starRating = document.getElementById('starRating');
+  starRating.addEventListener('click', e => {
+    if (e.target.dataset.value) {
+      const val = parseInt(e.target.dataset.value);
+      starRating.querySelectorAll('span').forEach(s => s.classList.toggle('filled', parseInt(s.dataset.value) <= val));
+      starRating.dataset.rating = val;
+    }
+  });
+  const manuInput = document.getElementById('manuDate');
+  const shelfInput = document.getElementById('shelfLife');
+  const expInput = document.getElementById('expDate');
+  function calcExpiry() {
+    if (manuInput.value && shelfInput.value) {
+      const manu = new Date(manuInput.value);
+      const days = parseInt(shelfInput.value);
+      if (!isNaN(days)) {
+        manu.setDate(manu.getDate() + days);
+        expInput.value = manu.toISOString().split('T')[0];
+      }
+    }
+  }
+  manuInput.addEventListener('change', calcExpiry);
+  shelfInput.addEventListener('input', calcExpiry);
+
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    const name = document.getElementById('name').value.trim();
+    const brand = document.getElementById('brand').value.trim();
+    if (!name || !brand) { alert('名称和品牌必填'); return; }
+    const catId = document.getElementById('catSelect').value;
+    const groupId = document.getElementById('groupSelect').value;
+    const price = parseFloat(document.getElementById('price').value) || undefined;
+    const productData = {
+      id: editId || genId(),
+      name, brand,
+      categoryId: catId,
+      groupId: groupId,
+      price: price,
+      category: '',
+      barcode: document.getElementById('barcode').value.trim(),
+      rating: parseInt(starRating.dataset.rating || 0),
+      netWeightG: parseFloat(document.getElementById('netWeight').value) || undefined,
+      manufactureDate: manuInput.value || undefined,
+      shelfLifeDays: parseInt(shelfInput.value) || undefined,
+      expirationDate: expInput.value || undefined,
+      nutrition: {
+        energyKJ: parseFloat(document.getElementById('energy').value) || undefined,
+        proteinG: parseFloat(document.getElementById('protein').value) || undefined,
+        fatG: parseFloat(document.getElementById('fat').value) || undefined,
+        carbsG: parseFloat(document.getElementById('carbs').value) || undefined,
+        sodiumMG: parseFloat(document.getElementById('sodium').value) || undefined,
+      },
+      createdAt: editId ? (appData.products.find(p => p.id === editId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (editId) {
+      const idx = appData.products.findIndex(p => p.id === editId);
+      if (idx >= 0) appData.products[idx] = productData;
+    } else {
+      const locId = document.getElementById('initLoc').value;
+      const qty = parseInt(document.getElementById('initQty').value) || 0;
+      appData.products.push(productData);
+      if (qty > 0) setStock(productData.id, locId, qty);
+    }
+    saveData();
+    if (editId) showProductDetail(editId);
+    else renderProducts();
+  });
+}
+
+// ====================== 地点管理 ======================
+function renderLocations() {
+  const container = document.getElementById('page-locations');
+  container.innerHTML = '<h2>仓库地点</h2>' +
+    appData.locations.map(l => '<div class="list-item" onclick="showLocationDetail(\'' + l.id + '\')">📍 ' + l.name + '</div>').join('') +
+    '<button class="btn btn-small" style="width:100%; margin-top:16px" onclick="addLocation()">+ 添加地点</button>';
+}
+function addLocation() { const n = prompt('仓库名称'); if (n) { appData.locations.push({ id: genId(), name: n }); saveData(); renderLocations(); } }
+function showLocationDetail(locId) {
+  const loc = appData.locations.find(l => l.id === locId);
+  const page = document.getElementById('page-locations');
+  page.innerHTML = '<button class="btn btn-small btn-outline" onclick="renderLocations()">← 返回</button><h2>' + loc.name + '</h2>' +
+    appData.products.map(p => { const q = getStockQuantity(p.id, locId); return q ? '<div class="list-item"><span>' + p.name + '</span><span>' + q + ' 件</span></div>' : ''; }).join('') +
+    '<button class="btn btn-small btn-danger" onclick="if(confirm(\'删除地点？\')){deleteLocation(\'' + locId + '\')}">删除地点</button>';
+}
+function deleteLocation(locId) {
+  appData.locations = appData.locations.filter(l => l.id !== locId);
+  appData.stockEntries = appData.stockEntries.filter(e => e.locationId !== locId);
+  appData.stockRecords = appData.stockRecords.filter(r => r.locationId !== locId);
+  saveData(); renderLocations();
+}
+
+// ====================== 概览（含分类管理 + 列表显示设置） ======================
+function renderSummary() {
+  const total = appData.stockEntries.reduce((s, e) => s + e.quantity, 0);
+  let catHtml = '<div class="card"><div class="section-title">分类管理</div>';
+  appData.categories.forEach(cat => {
+    catHtml += '<div style="margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #eee">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center">' +
+        '<span style="font-weight:bold;">' + cat.name + '</span>' +
+        '<button class="btn btn-small btn-danger" onclick="if(confirm(\'删除大类及所有分组？\')){deleteCategory(\'' + cat.id + '\')}">删除</button>' +
+      '</div>' +
+      '<div style="margin-top:4px;">' +
+        cat.groups.map(g => '<span style="display:inline-block; background:#f0f0f5; padding:4px 10px; border-radius:12px; margin:2px; font-size:14px;">' + g.name + ' <span style="color:#ff3b30; cursor:pointer" onclick="deleteGroup(\'' + cat.id + '\', \'' + g.id + '\')">✕</span></span>').join('') +
+      '</div>' +
+      '<button class="btn btn-small btn-outline" style="margin-top:6px;" onclick="addGroup(\'' + cat.id + '\')">+ 添加分组</button>' +
+    '</div>';
+  });
+  catHtml += '<button class="btn" style="width:100%" onclick="addCategory()">+ 添加大类</button></div>';
+
+  // 列表显示设置
+  const settings = appData.listSettings;
+  let settingsHtml = '<div class="card"><div class="section-title">列表显示字段</div>';
+  settingsHtml += '<div class="checkbox-group">';
+  settingsHtml += '<label><input type="checkbox" onchange="updateListSetting(\'showBrand\', this.checked)" ' + (settings.showBrand ? 'checked' : '') + '> 品牌</label>';
+  settingsHtml += '<label><input type="checkbox" onchange="updateListSetting(\'showCategory\', this.checked)" ' + (settings.showCategory ? 'checked' : '') + '> 分类</label>';
+  settingsHtml += '<label><input type="checkbox" onchange="updateListSetting(\'showPrice\', this.checked)" ' + (settings.showPrice ? 'checked' : '') + '> 价格</label>';
+  settingsHtml += '<label><input type="checkbox" onchange="updateListSetting(\'showRating\', this.checked)" ' + (settings.showRating ? 'checked' : '') + '> 评分</label>';
+  settingsHtml += '<label><input type="checkbox" onchange="updateListSetting(\'showKcal\', this.checked)" ' + (settings.showKcal ? 'checked' : '') + '> 热量</label>';
+  settingsHtml += '<label><input type="checkbox" onchange="updateListSetting(\'showStock\', this.checked)" ' + (settings.showStock ? 'checked' : '') + '> 库存数量</label>';
+  settingsHtml += '<label><input type="checkbox" onchange="updateListSetting(\'showExpiry\', this.checked)" ' + (settings.showExpiry ? 'checked' : '') + '> 过期状态</label>';
+  settingsHtml += '</div></div>';
+
+  document.getElementById('page-summary').innerHTML = '<h2>概览</h2>' +
+    '<div class="card"><p>商品种类: ' + appData.products.length + '</p></div>' +
+    '<div class="card"><p>仓库数量: ' + appData.locations.length + '</p></div>' +
+    '<div class="card"><p>总库存件数: ' + total + '</p></div>' +
+    catHtml + settingsHtml;
+}
+
+function updateListSetting(key, value) {
+  appData.listSettings[key] = value;
+  saveData();
+  if (document.getElementById('page-products').classList.contains('active')) {
+    renderProducts();
+  }
+}
+
+function addCategory() {
+  const name = prompt('输入大类名称');
+  if (name) {
+    appData.categories.push({ id: genId(), name, groups: [] });
+    saveData();
+    renderSummary();
+  }
+}
+function deleteCategory(catId) {
+  appData.categories = appData.categories.filter(c => c.id !== catId);
+  appData.products.forEach(p => {
+    if (p.categoryId === catId) {
+      p.categoryId = 'cat-drink';
+      p.groupId = 'grp-uncategorized';
+    }
+  });
+  saveData();
+  renderSummary();
+}
+function addGroup(catId) {
+  const name = prompt('输入分组名称');
+  if (name) {
+    const cat = appData.categories.find(c => c.id === catId);
+    if (cat) {
+      cat.groups.push({ id: genId(), name });
+      saveData();
+      renderSummary();
+    }
+  }
+}
+function deleteGroup(catId, groupId) {
+  const cat = appData.categories.find(c => c.id === catId);
+  if (cat) {
+    cat.groups = cat.groups.filter(g => g.id !== groupId);
+    appData.products.forEach(p => {
+      if (p.categoryId === catId && p.groupId === groupId) {
+        p.groupId = cat.groups[0] ? cat.groups[0].id : 'grp-uncategorized';
+      }
+    });
+    saveData();
+    renderSummary();
+  }
+}
+
+// ====================== CSV 导入 ======================
+const CSV_HEADER = '商品名称,品牌,分类(旧),条码,评分,净含量(g),生产日期,保质期(天),过期日期,能量(kJ),蛋白质(g),脂肪(g),碳水(g),钠(mg),价格(元),大类,分组,仓库名称,数量';
+function downloadTemplate() {
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + CSV_HEADER], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '库存导入模板.csv';
+  a.click();
+}
+function triggerFileInput() { document.getElementById('csvFileInput').click(); }
+function handleFileImport(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const result = importCSV(e.target.result);
+    alert(result.msg);
+    if (result.count > 0 && document.getElementById('page-products').classList.contains('active')) renderProducts();
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+function importCSV(text) {
+  const lines = text.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return { count: 0, msg: '文件为空' };
+  let count = 0, errors = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    const name = (cols[0] || '').trim();
+    const brand = (cols[1] || '').trim();
+    if (!name || !brand) { errors.push('行' + (i+1) + '名称/品牌缺失'); continue; }
+    const price = parseFloat(cols[14]) || undefined;
+    const catName = (cols[15] || '').trim();
+    const groupName = (cols[16] || '').trim();
+    let categoryId = 'cat-drink', groupId = 'grp-uncategorized';
+    if (catName) {
+      const cat = appData.categories.find(c => c.name === catName);
+      if (cat) {
+        categoryId = cat.id;
+        if (groupName) {
+          const group = cat.groups.find(g => g.name === groupName);
+          if (group) groupId = group.id;
+        }
+      }
+    }
+    const product = {
+      id: genId(), name, brand,
+      categoryId, groupId, price,
+      barcode: (cols[3] || '').trim(),
+      rating: parseInt(cols[4]) || 0,
+      netWeightG: parseFloat(cols[5]) || undefined,
+      manufactureDate: cols[6] || undefined,
+      shelfLifeDays: parseInt(cols[7]) || undefined,
+      expirationDate: cols[8] || undefined,
+      nutrition: {
+        energyKJ: parseFloat(cols[9]) || undefined,
+        proteinG: parseFloat(cols[10]) || undefined,
+        fatG: parseFloat(cols[11]) || undefined,
+        carbsG: parseFloat(cols[12]) || undefined,
+        sodiumMG: parseFloat(cols[13]) || undefined,
+      },
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    };
+    const locName = (cols[17] || '').trim();
+    let locId = appData.locations[0]?.id;
+    if (locName) {
+      const found = appData.locations.find(l => l.name === locName);
+      if (found) locId = found.id;
+    }
+    const qty = parseInt(cols[18]) || 1;
+    appData.products.push(product);
+    if (locId) setStock(product.id, locId, qty);
+    count++;
+  }
+  saveData();
+  return { count, msg: '成功导入 ' + count + ' 条' + (errors.length ? '\n' + errors.join('\n') : '') };
+}
+
+// 导航
+function switchTab(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  document.querySelector('[data-page="' + page + '"]').classList.add('active');
+  if (page === 'products') renderProducts();
+  else if (page === 'locations') renderLocations();
+  else if (page === 'summary') renderSummary();
+}
+document.querySelectorAll('.tab-item').forEach(item => item.addEventListener('click', () => switchTab(item.dataset.page)));
+
+loadData();
+switchTab('products');
+</script>
+</body>
+</html>
